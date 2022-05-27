@@ -9,6 +9,11 @@ import { IcombineH5, IcombineNative, IcombineApp, IcombineJsapi, IcloseSubOrders
 class Pay {
   private appid: string; //  直连商户申请的公众号或移动应用appid。
   private mchid: string; // 商户号
+
+  private sp_appid?: string // 服务商AppID
+  private sp_mchid?: string // 服务商商户号
+  private notify_url?: string
+
   private serial_no = ''; // 证书序列号
   private publicKey?: Buffer; // 公钥
   private privateKey?: Buffer; // 密钥
@@ -29,7 +34,13 @@ class Pay {
    * @param userAgent 可选参数 User-Agent
    * @param key 可选参数 APIv3密钥
    */
-  public constructor(appid: string, mchid: string, publicKey: Buffer, privateKey: Buffer, optipns?: Ioptions);
+  public constructor(
+    appid: string,
+    mchid: string,
+    publicKey: Buffer,
+    privateKey: Buffer,
+    optipns?: Ioptions
+  );
   /**
    * 构造器
    * @param obj object类型 包括下面参数
@@ -63,6 +74,10 @@ class Pay {
       this.mchid = mchid || '';
       this.publicKey = publicKey;
       this.privateKey = privateKey;
+
+      this.sp_appid = _optipns.sp_appid || '';
+      this.sp_mchid = _optipns.sp_mchid || '';
+      this.notify_url = _optipns.notify_url || '';
 
       this.authType = _optipns.authType || 'WECHATPAY2-SHA256-RSA2048';
       this.userAgent = _optipns.userAgent || '127.0.0.1';
@@ -522,6 +537,45 @@ class Pay {
     }
     return result;
   }
+
+  /**
+   * 服务商逻辑
+   * https://pay.weixin.qq.com/wiki/doc/apiv3_partner/apis/chapter4_1_1.shtml
+   */
+  public async transactions_jsapi_sp(params: Ijsapi): Promise<Record<string, any>> {
+    // 请求参数
+    const _params = {
+      sp_appid: this.sp_appid,
+      sp_mchid: this.sp_mchid,
+      sub_appid: this.appid,
+      sub_mchid: this.mchid,
+      notify_url: this.notify_url,
+      ...params,
+    };
+
+    const url = 'https://api.mch.weixin.qq.com/v3/pay/partner/transactions/jsapi';
+    const authorization = this.init('POST', url, _params);
+
+    const result: any = await this.postRequest(url, _params, authorization);
+    if (result.status === 200 && result.prepay_id) {
+      const data = {
+        status: result.status,
+        appId: this.appid,
+        timeStamp: parseInt(+new Date() / 1000 + '').toString(),
+        nonceStr: Math.random()
+          .toString(36)
+          .substr(2, 15),
+        package: `prepay_id=${result.prepay_id}`,
+        signType: 'RSA',
+        paySign: '',
+      };
+      const str = [data.appId, data.timeStamp, data.nonceStr, data.package, ''].join('\n');
+      data.paySign = this.sign(str);
+      return data;
+    }
+    return result;
+  }
+
   /**
    * 合单JSAPI支付 或者 小程序支付
    * @param params 请求参数 object 参数介绍 请看文档https://pay.weixin.qq.com/wiki/doc/apiv3/apis/chapter5_1_3.shtml
