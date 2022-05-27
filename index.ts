@@ -3,8 +3,8 @@ import crypto from 'crypto';
 import request from 'superagent';
 const x509_1 = require('@fidm/x509');
 
-import { Ipay, Ih5, Inative, Ijsapi, Iquery1, Iquery2, Itradebill, Ifundflowbill, Iapp, Ioptions, Irefunds1, Irefunds2 } from './lib/interface';
-import { IcombineH5, IcombineNative, IcombineApp, IcombineJsapi, IcloseSubOrders } from './lib/combine_interface';
+import { Ipay, Ih5, Inative, Ijsapi, IjsapiSP, Iquery1, Iquery2, Itradebill, Ifundflowbill, Iapp, Ioptions, Irefunds1, Irefunds2 } from './lib/interface';
+import { IcombineH5, IcombineNative, IcombineApp, IcombineJsapi, IcloseSubOrders  } from './lib/combine_interface';
 
 class Pay {
   private appid: string; //  直连商户申请的公众号或移动应用appid。
@@ -21,32 +21,17 @@ class Pay {
   private userAgent = '127.0.0.1'; // User-Agent
   private key?: string; // APIv3密钥
   private static certificates: { [key in string]: string } = {}; // 商户平台证书 key 是 serialNo, value 是 publicKey
-  /**
-   * 构造器
-   * @param appid 直连商户申请的公众号或移动应用appid。
-   * @param mchid 商户号
-   * @param publicKey 公钥
-   * @param privateKey 密钥
-   * @param optipns 可选参数 object 包括下面参数
-   *
-   * @param serial_no  证书序列号
-   * @param authType 可选参数 认证类型，目前为WECHATPAY2-SHA256-RSA2048
-   * @param userAgent 可选参数 User-Agent
-   * @param key 可选参数 APIv3密钥
-   */
-  public constructor(
-    appid: string,
-    mchid: string,
-    publicKey: Buffer,
-    privateKey: Buffer,
-    optipns?: Ioptions
-  );
+
+  public static decipher_gcm = decipher_gcm
   /**
    * 构造器
    * @param obj object类型 包括下面参数
    *
    * @param appid 直连商户申请的公众号或移动应用appid。
    * @param mchid 商户号
+   * 
+   * @param sp_appid 服务商appid
+   * @param sp_mchid 服务商商户号
    * @param serial_no  可选参数 证书序列号
    * @param publicKey 公钥
    * @param privateKey 密钥
@@ -55,37 +40,22 @@ class Pay {
    * @param key 可选参数 APIv3密钥
    */
   public constructor(obj: Ipay);
-  constructor(arg1: Ipay | string, mchid?: string, publicKey?: Buffer, privateKey?: Buffer, optipns?: Ioptions) {
-    if (arg1 instanceof Object) {
-      this.appid = arg1.appid;
-      this.mchid = arg1.mchid;
-      if (arg1.serial_no) this.serial_no = arg1.serial_no;
-      this.publicKey = arg1.publicKey;
-      if (!this.publicKey) throw new Error('缺少公钥');
-      this.privateKey = arg1.privateKey;
-      if (!arg1.serial_no) this.serial_no = this.getSN(this.publicKey);
+  constructor(options: Ioptions) {
+    this.appid = options.appid || '';
+    this.mchid = options.mchid || '';
+    this.publicKey = options.publicKey;
+    this.privateKey = options.privateKey;
+    this.sp_appid = options.sp_appid || '';
+    this.sp_mchid = options.sp_mchid || '';
+    this.notify_url = options.notify_url || '';
 
-      this.authType = arg1.authType || 'WECHATPAY2-SHA256-RSA2048';
-      this.userAgent = arg1.userAgent || '127.0.0.1';
-      this.key = arg1.key;
-    } else {
-      const _optipns = optipns || {};
-      this.appid = arg1;
-      this.mchid = mchid || '';
-      this.publicKey = publicKey;
-      this.privateKey = privateKey;
-
-      this.sp_appid = _optipns.sp_appid || '';
-      this.sp_mchid = _optipns.sp_mchid || '';
-      this.notify_url = _optipns.notify_url || '';
-
-      this.authType = _optipns.authType || 'WECHATPAY2-SHA256-RSA2048';
-      this.userAgent = _optipns.userAgent || '127.0.0.1';
-      this.key = _optipns.key;
-      this.serial_no = _optipns.serial_no || '';
-      if (!this.publicKey) throw new Error('缺少公钥');
-      if (!this.serial_no) this.serial_no = this.getSN(this.publicKey);
-    }
+    this.authType = options.authType || 'WECHATPAY2-SHA256-RSA2048';
+    this.userAgent = options.userAgent || '127.0.0.1';
+    this.key = options.key;
+    this.serial_no = options.serial_no || '';
+    
+    if (!this.publicKey) throw new Error('缺少公钥');
+    if (!this.serial_no) this.serial_no = this.getSN(this.publicKey);
   }
   /**
    * 拉取平台证书到 Pay.certificates 中
@@ -274,6 +244,7 @@ class Pay {
       return decoded as T;
     }
   }
+
   /**
    * 参数初始化
    */
@@ -542,13 +513,11 @@ class Pay {
    * 服务商逻辑
    * https://pay.weixin.qq.com/wiki/doc/apiv3_partner/apis/chapter4_1_1.shtml
    */
-  public async transactions_jsapi_sp(params: Ijsapi): Promise<Record<string, any>> {
+  public async transactions_jsapi_sp(params: IjsapiSP): Promise<Record<string, any>> {
     // 请求参数
     const _params = {
       sp_appid: this.sp_appid,
       sp_mchid: this.sp_mchid,
-      sub_appid: this.appid,
-      sub_mchid: this.mchid,
       notify_url: this.notify_url,
       ...params,
     };
@@ -749,6 +718,25 @@ class Pay {
 
     const authorization = this.init('GET', url);
     return await this.getRequest(url, authorization);
+  }
+}
+
+function decipher_gcm<T extends any>(ciphertext: string, associated_data: string, nonce: string, key: string): T {
+  const _ciphertext = Buffer.from(ciphertext, 'base64');
+
+  // 解密 ciphertext字符  AEAD_AES_256_GCM算法
+  const authTag: any = _ciphertext.slice(_ciphertext.length - 16);
+  const data = _ciphertext.slice(0, _ciphertext.length - 16);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce);
+  decipher.setAuthTag(authTag);
+  decipher.setAAD(Buffer.from(associated_data));
+  const decoded = decipher.update(data, undefined, 'utf8');
+  decipher.final();
+
+  try {
+    return JSON.parse(decoded);
+  } catch (e) {
+    return decoded as T;
   }
 }
 

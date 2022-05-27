@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { Ipay, Ih5, Inative, Ijsapi, Iquery1, Iquery2, Itradebill, Ifundflowbill, Iapp, Ioptions, Irefunds1, Irefunds2 } from './lib/interface';
+import { Ipay, Ih5, Inative, Ijsapi, IjsapiSP, Iquery1, Iquery2, Itradebill, Ifundflowbill, Iapp, Irefunds1, Irefunds2 } from './lib/interface';
 import { IcombineH5, IcombineNative, IcombineApp, IcombineJsapi, IcloseSubOrders } from './lib/combine_interface';
 declare class Pay {
     private appid;
@@ -14,26 +14,16 @@ declare class Pay {
     private userAgent;
     private key?;
     private static certificates;
-    /**
-     * 构造器
-     * @param appid 直连商户申请的公众号或移动应用appid。
-     * @param mchid 商户号
-     * @param publicKey 公钥
-     * @param privateKey 密钥
-     * @param optipns 可选参数 object 包括下面参数
-     *
-     * @param serial_no  证书序列号
-     * @param authType 可选参数 认证类型，目前为WECHATPAY2-SHA256-RSA2048
-     * @param userAgent 可选参数 User-Agent
-     * @param key 可选参数 APIv3密钥
-     */
-    constructor(appid: string, mchid: string, publicKey: Buffer, privateKey: Buffer, optipns?: Ioptions);
+    static decipher_gcm: typeof decipher_gcm;
     /**
      * 构造器
      * @param obj object类型 包括下面参数
      *
      * @param appid 直连商户申请的公众号或移动应用appid。
      * @param mchid 商户号
+     *
+     * @param sp_appid 服务商appid
+     * @param sp_mchid 服务商商户号
      * @param serial_no  可选参数 证书序列号
      * @param publicKey 公钥
      * @param privateKey 密钥
@@ -151,7 +141,7 @@ declare class Pay {
      * 服务商逻辑
      * https://pay.weixin.qq.com/wiki/doc/apiv3_partner/apis/chapter4_1_1.shtml
      */
-    transactions_jsapi_sp(params: Ijsapi): Promise<Record<string, any>>;
+    transactions_jsapi_sp(params: IjsapiSP): Promise<Record<string, any>>;
     /**
      * 合单JSAPI支付 或者 小程序支付
      * @param params 请求参数 object 参数介绍 请看文档https://pay.weixin.qq.com/wiki/doc/apiv3/apis/chapter5_1_3.shtml
@@ -204,4 +194,5 @@ declare class Pay {
      */
     find_refunds(out_refund_no: string): Promise<Record<string, any>>;
 }
+declare function decipher_gcm<T extends any>(ciphertext: string, associated_data: string, nonce: string, key: string): T;
 export = Pay;

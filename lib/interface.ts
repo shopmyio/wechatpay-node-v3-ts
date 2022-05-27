@@ -55,9 +55,13 @@ export interface Ioptions {
   authType?: string;
   key?: string;
   serial_no?: string;
+  appid?: string;
+  mchid?: string;
   sp_appid?: string;
   sp_mchid?: string;
   notify_url?: string;
+  publicKey: Buffer;
+  privateKey: Buffer;
 }
 export interface Ipay {
   appid: string; //  直连商户申请的公众号或移动应用appid。
@@ -88,6 +92,22 @@ export interface Inative {
   notify_url: string;
   goods_tag?: string;
   amount: Iamount;
+  detail?: Idetail;
+  scene_info?: IsceneInfoNative;
+}
+
+export interface IjsapiSP {
+  description: string;
+  out_trade_no: string;
+  sub_appid: string;
+  sub_mchid: string;
+  amount: Iamount;
+  payer: Ipayer;
+
+  time_expire?: string;
+  attach?: string;
+  notify_url?: string;
+  goods_tag?: string;
   detail?: Idetail;
   scene_info?: IsceneInfoNative;
 }

@@ -53,43 +53,25 @@ var crypto_1 = __importDefault(require("crypto"));
 var superagent_1 = __importDefault(require("superagent"));
 var x509_1 = require('@fidm/x509');
 var Pay = /** @class */ (function () {
-    function Pay(arg1, mchid, publicKey, privateKey, optipns) {
+    function Pay(options) {
         this.serial_no = ''; // 证书序列号
         this.authType = 'WECHATPAY2-SHA256-RSA2048'; // 认证类型，目前为WECHATPAY2-SHA256-RSA2048
         this.userAgent = '127.0.0.1'; // User-Agent
-        if (arg1 instanceof Object) {
-            this.appid = arg1.appid;
-            this.mchid = arg1.mchid;
-            if (arg1.serial_no)
-                this.serial_no = arg1.serial_no;
-            this.publicKey = arg1.publicKey;
-            if (!this.publicKey)
-                throw new Error('缺少公钥');
-            this.privateKey = arg1.privateKey;
-            if (!arg1.serial_no)
-                this.serial_no = this.getSN(this.publicKey);
-            this.authType = arg1.authType || 'WECHATPAY2-SHA256-RSA2048';
-            this.userAgent = arg1.userAgent || '127.0.0.1';
-            this.key = arg1.key;
-        }
-        else {
-            var _optipns = optipns || {};
-            this.appid = arg1;
-            this.mchid = mchid || '';
-            this.publicKey = publicKey;
-            this.privateKey = privateKey;
-            this.sp_appid = _optipns.sp_appid || '';
-            this.sp_mchid = _optipns.sp_mchid || '';
-            this.notify_url = _optipns.notify_url || '';
-            this.authType = _optipns.authType || 'WECHATPAY2-SHA256-RSA2048';
-            this.userAgent = _optipns.userAgent || '127.0.0.1';
-            this.key = _optipns.key;
-            this.serial_no = _optipns.serial_no || '';
-            if (!this.publicKey)
-                throw new Error('缺少公钥');
-            if (!this.serial_no)
-                this.serial_no = this.getSN(this.publicKey);
-        }
+        this.appid = options.appid || '';
+        this.mchid = options.mchid || '';
+        this.publicKey = options.publicKey;
+        this.privateKey = options.privateKey;
+        this.sp_appid = options.sp_appid || '';
+        this.sp_mchid = options.sp_mchid || '';
+        this.notify_url = options.notify_url || '';
+        this.authType = options.authType || 'WECHATPAY2-SHA256-RSA2048';
+        this.userAgent = options.userAgent || '127.0.0.1';
+        this.key = options.key;
+        this.serial_no = options.serial_no || '';
+        if (!this.publicKey)
+            throw new Error('缺少公钥');
+        if (!this.serial_no)
+            this.serial_no = this.getSN(this.publicKey);
     }
     /**
      * 拉取平台证书到 Pay.certificates 中
@@ -564,7 +546,7 @@ var Pay = /** @class */ (function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        _params = __assign({ sp_appid: this.sp_appid, sp_mchid: this.sp_mchid, sub_appid: this.appid, sub_mchid: this.mchid, notify_url: this.notify_url }, params);
+                        _params = __assign({ sp_appid: this.sp_appid, sp_mchid: this.sp_mchid, notify_url: this.notify_url }, params);
                         url = 'https://api.mch.weixin.qq.com/v3/pay/partner/transactions/jsapi';
                         authorization = this.init('POST', url, _params);
                         return [4 /*yield*/, this.postRequest(url, _params, authorization)];
@@ -838,6 +820,24 @@ var Pay = /** @class */ (function () {
         });
     };
     Pay.certificates = {}; // 商户平台证书 key 是 serialNo, value 是 publicKey
+    Pay.decipher_gcm = decipher_gcm;
     return Pay;
 }());
+function decipher_gcm(ciphertext, associated_data, nonce, key) {
+    var _ciphertext = Buffer.from(ciphertext, 'base64');
+    // 解密 ciphertext字符  AEAD_AES_256_GCM算法
+    var authTag = _ciphertext.slice(_ciphertext.length - 16);
+    var data = _ciphertext.slice(0, _ciphertext.length - 16);
+    var decipher = crypto_1.default.createDecipheriv('aes-256-gcm', key, nonce);
+    decipher.setAuthTag(authTag);
+    decipher.setAAD(Buffer.from(associated_data));
+    var decoded = decipher.update(data, undefined, 'utf8');
+    decipher.final();
+    try {
+        return JSON.parse(decoded);
+    }
+    catch (e) {
+        return decoded;
+    }
+}
 module.exports = Pay;
